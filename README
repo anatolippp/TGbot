@@ -1,0 +1,17 @@
+ЗАПУСК Docker
+
+cd TGbot
+docker-compose -d --build
+
+TG BOT - @Helloborobot
+(/start and /stop)
+
+
+Local
+1) pip install -r requirements.txt
+2) redis-server --daemonize yes
+3) uvicorn app:app --host 0.0.0.0 --port 8000 --reload
+4) celery -A tasks worker --loglevel=info --pool=solo
+5) celery -A tasks beat --loglevel=info
+5) python3 bot.py
+
