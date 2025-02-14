@@ -1,46 +1,49 @@
 import asyncio
-
+import logging
 import redis
-import telegram
 from celery import Celery
-from celery.schedules import timedelta
+from sqlalchemy.orm import Session
+from telegram import Bot
+from telegram.request import HTTPXRequest
 
+from db.database import SessionLocal
+from db.models import UserSettings
 from config import TELEGRAM_BOT_TOKEN, CELERY_BROKER_URL, CELERY_RESULT_BACKEND
 
+logger = logging.getLogger(__name__)
+
 celery = Celery("tasks", broker=CELERY_BROKER_URL, backend=CELERY_RESULT_BACKEND)
-bot = telegram.Bot(token=TELEGRAM_BOT_TOKEN)
 redis_client = redis.StrictRedis(host="redis", port=6379, db=0, decode_responses=True)
 
+request = HTTPXRequest()
+bot = Bot(token=TELEGRAM_BOT_TOKEN, request=request)
 
-async def send_message(chat_id):
-    try:
-        print(f"SEND hello {chat_id}")
-        await bot.send_message(chat_id=chat_id, text="Hello")
-        print(f"Sent {chat_id}")
-    except Exception as e:
-        print(f"Mistake sening {chat_id}: {e}")
-
+loop = asyncio.new_event_loop()
+asyncio.set_event_loop(loop)
 
 @celery.task
 def send_hello():
-    if redis_client.get("running") == "1":
+    db = SessionLocal()
+    settings = db.query(UserSettings).first()
+    db.close()
+
+    if not settings:
+        interval = 5
+        phrase = "Hello"
+    else:
+        interval = settings.interval or 5
+        phrase = settings.phrase or "Hello"
+
+    running = redis_client.get("running")
+    if running == "1":
         chat_ids = redis_client.smembers("active_users")
-        print(f"Error Redis: {chat_ids}")
-
         if chat_ids:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            tasks = [send_message(chat_id) for chat_id in chat_ids]
-            loop.run_until_complete(asyncio.gather(*tasks))
-            loop.close()
-            print("All sent!")
-        else:
-            print("No users")
+            coros = [_send_message(cid, phrase) for cid in chat_ids]
+            loop.run_until_complete(asyncio.gather(*coros))
+        send_hello.apply_async(countdown=interval)
 
-
-celery.conf.beat_schedule = {
-    "send_hello_every_5_seconds": {
-        "task": "tasks.send_hello",
-        "schedule": timedelta(seconds=5),
-    },
-}
+async def _send_message(chat_id, text):
+    try:
+        await bot.send_message(chat_id=chat_id, text=text)
+    except Exception as e:
+        logger.warning(f"Error sending message to {chat_id}: {e}")

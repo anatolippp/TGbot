@@ -7,6 +7,9 @@ TG BOT - @Helloborobot
 (/start and /stop)
 
 
+PLEASE type /start in the telegram bot before use api
+
+
 Local
 1) pip install -r requirements.txt
 2) redis-server --daemonize yes
