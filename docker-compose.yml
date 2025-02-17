@@ -26,7 +26,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: uvicorn app:app --host 0.0.0.0 --port 8000
+    command: sh -c "python -c 'from db.database import create_tables; create_tables()' && uvicorn app:app --host 0.0.0.0 --port 8000"
     environment:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - DATABASE_URL=${DATABASE_URL}
@@ -42,7 +42,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: celery -A tasks worker --loglevel=info --concurrency=1
+    command: celery -A tasks worker --loglevel=info --pool=prefork --concurrency=1
     environment:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - DATABASE_URL=${DATABASE_URL}
